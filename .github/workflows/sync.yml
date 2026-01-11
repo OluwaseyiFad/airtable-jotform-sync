@@ -1,0 +1,44 @@
+name: Sync Jotform to Airtable
+
+on:
+  schedule:
+    # Runs every hour
+    - cron: '0 * * * *'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run sync script
+        env:
+          JOTFORM_API_KEY: ${{ secrets.JOTFORM_API_KEY }}
+          JOTFORM_FORM_ID: ${{ secrets.JOTFORM_FORM_ID }}
+          AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
+          AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
+          AIRTABLE_TABLE: ${{ secrets.AIRTABLE_TABLE }}
+          FIELD_SUBMISSION_ID: ${{ secrets.FIELD_SUBMISSION_ID }}
+          FIELD_UPDATED_AT: ${{ secrets.FIELD_UPDATED_AT }}
+          FIELD_RAW: ${{ secrets.FIELD_RAW }}
+          FIELD_ATTACHMENTS: ${{ secrets.FIELD_ATTACHMENTS }}
+        run: python sync.py
+
+      - name: Commit updated watermark
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add watermark.json
+          git diff --staged --quiet || git commit -m "Update watermark"
+          git push
