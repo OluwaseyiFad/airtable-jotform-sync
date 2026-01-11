@@ -2,8 +2,7 @@ name: Sync Jotform to Airtable
 
 on:
   schedule:
-    # Runs every hour
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'  # Runs every hour
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
@@ -28,11 +27,6 @@ jobs:
           JOTFORM_FORM_ID: ${{ secrets.JOTFORM_FORM_ID }}
           AIRTABLE_TOKEN: ${{ secrets.AIRTABLE_TOKEN }}
           AIRTABLE_BASE_ID: ${{ secrets.AIRTABLE_BASE_ID }}
-          AIRTABLE_TABLE: ${{ secrets.AIRTABLE_TABLE }}
-          FIELD_SUBMISSION_ID: ${{ secrets.FIELD_SUBMISSION_ID }}
-          FIELD_UPDATED_AT: ${{ secrets.FIELD_UPDATED_AT }}
-          FIELD_RAW: ${{ secrets.FIELD_RAW }}
-          FIELD_ATTACHMENTS: ${{ secrets.FIELD_ATTACHMENTS }}
         run: python sync.py
 
       - name: Commit updated watermark

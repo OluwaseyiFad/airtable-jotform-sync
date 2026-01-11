@@ -9,22 +9,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Secrets 
 JOTFORM_API_KEY = os.getenv("JOTFORM_API_KEY", "")
 JOTFORM_FORM_ID = os.getenv("JOTFORM_FORM_ID", "")
-
 AIRTABLE_TOKEN = os.getenv("AIRTABLE_TOKEN", "")
 AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
-AIRTABLE_TABLE = os.getenv("AIRTABLE_TABLE", "")
 
-FIELD_SUBMISSION_ID = os.getenv("FIELD_SUBMISSION_ID", "Submission ID")
-FIELD_UPDATED_AT = os.getenv("FIELD_UPDATED_AT", "Last Jotform Updated At")
-FIELD_RAW = os.getenv("FIELD_RAW", "Raw Payload")
 
-ATTACHMENTS_MODE = os.getenv("ATTACHMENTS_MODE", "attachment").strip().lower()
-FIELD_FILES_TEXT = os.getenv("FIELD_FILES_TEXT", "Resume URLs")
-FIELD_ATTACHMENTS = os.getenv("FIELD_ATTACHMENTS", "Resume")
-
-JOTFORM_RESUME_QID = os.getenv("JOTFORM_RESUME_QID", "").strip()
+AIRTABLE_TABLE = "Table 1"
+FIELD_SUBMISSION_ID = "Submission ID"
+FIELD_UPDATED_AT = "Last Jotform Updated At"
+FIELD_RAW = "Raw Payload"
+FIELD_ATTACHMENTS = "Attachments"
+ATTACHMENTS_MODE = "attachment"  # "attachment" or "text"
+FIELD_FILES_TEXT = "Resume URLs"  # Only used if ATTACHMENTS_MODE = "text"
+JOTFORM_RESUME_QID = ""  # Leave empty to auto-detect file uploads
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WATERMARK_FILE = os.path.join(SCRIPT_DIR, "watermark.json")
