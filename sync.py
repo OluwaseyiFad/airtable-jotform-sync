@@ -9,27 +9,125 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Secrets 
+# Secrets
 JOTFORM_API_KEY = os.getenv("JOTFORM_API_KEY", "")
 JOTFORM_FORM_ID = os.getenv("JOTFORM_FORM_ID", "")
 AIRTABLE_TOKEN = os.getenv("AIRTABLE_TOKEN", "")
 AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID", "")
 
-
 AIRTABLE_TABLE = "Table 1"
-FIELD_SUBMISSION_ID = "Submission ID"
-FIELD_UPDATED_AT = "Last Jotform Updated At"
-FIELD_RAW = "Raw Payload"
-FIELD_ATTACHMENTS = "Attachments"
-ATTACHMENTS_MODE = "attachment"  # "attachment" or "text"
-FIELD_FILES_TEXT = "Resume URLs"  # Only used if ATTACHMENTS_MODE = "text"
-JOTFORM_RESUME_QID = ""  # Leave empty to auto-detect file uploads
+# Submission ID to track/update records
+SUBMISSION_ID_FIELD = "Submission ID"
+
+# Fields that need numeric conversion
+NUMERIC_FIELDS = ["Top 10 Class"]
+
+# Fields that need array format (multipleSelects in Airtable)
+MULTI_SELECT_FIELDS = [
+    "Are you interested in volunteering in one of the vocations below?",
+    "Fields of Interest",
+]
+
+# Skip these fields for now
+SKIP_FIELDS = [
+    "Are you interested in volunteering in one of the vocations below?",
+    "Fields of Interest",
+    "Business Phone Number (Area Code)",
+    "Business Address (State)",
+    "Home Address (State/Province)",
+]
+
+# Vocation experience fields that need value normalization (Jotform → Airtable)
+VOCATION_FIELDS = [
+    "1. Public Health/Hospitals",
+    "2. Public Service",
+    "3. Finance/Banking/Insurance",
+    "4. Government",
+    "5. Transportation (i.e. RTA)",
+    "6. Engineering",
+    "7. IT Technology",
+    "8. Social Service",
+    "9. Non Profit",
+    "10. Public Safety",
+    "11. Civil Rights Activist",
+    "12. Mentoring",
+    "13. Equity",
+    "14. Human Resources",
+]
+
+# Normalize Jotform vocation values to match Airtable options
+VOCATION_VALUE_MAP = {
+    "0-2 years": "0-2 Years",
+    "> 10 years": "> 10 Years",
+    # These already match: "> 3-5 Years"
+}
+
+# Jotform field name - Airtable field name mapping
+FIELD_MAPPING = {
+    "highestEducation": "Highest Education Level Completed",
+    "top10": "Top 10 Class",
+    "title": "Title",
+    "mostRecent": "Most Recent Employer",
+    "businessEmail": "Business Email (if currently employed)",
+    "businessName": "Business Name",
+    "personalEmail": "Personal Email",
+    "whichOf": "Which of these options above are your Top 3 choices?",
+    "resume": "Resume",
+    "retired": "Retired",
+    "additionalComments": "Additional Comments:",
+    "typeA": "1. Public Health/Hospitals",
+    "typeA35": "2. Public Service",
+    "2Public": "3. Finance/Banking/Insurance",
+    "2Public37": "4. Government",
+    "2Public38": "5. Transportation (i.e. RTA)",
+    "2Public39": "6. Engineering",
+    "7It": "7. IT Technology",
+    "2Public41": "8. Social Service",
+    "2Public42": "9. Non Profit",
+    "2Public43": "10. Public Safety",
+    "2Public44": "11. Civil Rights Activist",
+    "2Public45": "12. Mentoring",
+    "2Public46": "13. Equity",
+    "2Public47": "14. Human Resources",
+    "typeA50": "Are you interested in volunteering in one of the vocations below?",
+    "typeA77": "Fields of Interest",
+}
+
+# Composite fields (fullname, address, phone) with subfield mappings
+COMPOSITE_FIELDS = {
+    "name": {
+        "first": "Name (First)",
+        "last": "Name (Last)",
+    },
+    "homeAddress": {
+        "addr_line1": "Home Address (Street)",
+        "addr_line2": "Home Address (Street Line 2)",
+        "city": "Home Address (City)",
+        "state": "Home Address (State/Province)",
+        "postal": "Home Address (Postal/Zip Code)",
+    },
+    "businessAddress15": {
+        "addr_line1": "Business Address (Street Address)",
+        "addr_line2": "Business Address (Street Address Line 2)",
+        "city": "Business Address (City)",
+        "state": "Business Address (State)",
+        "postal": "Business Address (Zip Code)",
+    },
+    "personalPhone": {
+        "full": "Personal Phone Number",
+    },
+    "businessPhone": {
+        "area": "Business Phone Number (Area Code)",
+        "full": "Business Phone Number",
+    },
+}
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 WATERMARK_FILE = os.path.join(SCRIPT_DIR, "watermark.json")
 QUESTIONS_CACHE: Dict[str, Any] = {}
 
-JOTFORM_BASE = "https://api.jotform.com"
+# Enterprise URL
+JOTFORM_BASE = os.getenv("JOTFORM_BASE", "https://parityinc.jotform.com/API")
 AIRTABLE_BASE = f"https://api.airtable.com/v0/{AIRTABLE_BASE_ID}/{AIRTABLE_TABLE}"
 
 
@@ -44,13 +142,11 @@ def parse_timestamp(value: Any) -> int:
     if isinstance(value, int):
         return value
     if isinstance(value, str):
-        # Try parsing as datetime string (e.g., '2025-12-28 13:21:58')
         try:
             dt = datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
             return int(dt.timestamp())
         except ValueError:
             pass
-        # Try parsing as int string
         try:
             return int(value)
         except ValueError:
@@ -94,6 +190,8 @@ def airtable_post(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def airtable_patch(record_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     r = requests.patch(f"{AIRTABLE_BASE}/{record_id}", headers=headers_airtable(), json=payload, timeout=30)
+    if not r.ok:
+        print(f"[ERROR] Airtable PATCH failed: {r.status_code} - {r.text}")
     r.raise_for_status()
     return r.json()
 
@@ -133,6 +231,27 @@ def get_answer_value(answer_obj: Any, qtype: str) -> Any:
     return answer_obj
 
 
+def extract_composite_fields(field_name: str, answer_obj: Any) -> Dict[str, str]:
+    """Extract subfields from composite Jotform fields (name, address, phone)."""
+    result = {}
+    if field_name not in COMPOSITE_FIELDS or not isinstance(answer_obj, dict):
+        return result
+
+    mapping = COMPOSITE_FIELDS[field_name]
+    answer = answer_obj.get("answer", {})
+    if not isinstance(answer, dict):
+        return result
+
+    for jotform_key, airtable_field in mapping.items():
+        value = answer.get(jotform_key, "")
+        if value:
+            result[airtable_field] = str(value)
+        else:
+            result[airtable_field] = ""
+
+    return result
+
+
 def load_watermark() -> int:
     if not os.path.exists(WATERMARK_FILE):
         return 0
@@ -146,10 +265,12 @@ def save_watermark(ts: int) -> None:
         json.dump({"last_updated_at": int(ts)}, f)
 
 
-def find_airtable_record_by_submission_id(submission_id: str) -> Optional[str]:
-    # Airtable filterByFormula; escape single quotes by doubling them
+def find_record_by_submission_id(submission_id: str) -> Optional[str]:
+    """Find an Airtable record by Jotform submission ID."""
+    if not submission_id:
+        return None
     safe = submission_id.replace("'", "''")
-    formula = f"{{{FIELD_SUBMISSION_ID}}}='{safe}'"
+    formula = f"{{{SUBMISSION_ID_FIELD}}}='{safe}'"
     resp = airtable_get({"filterByFormula": formula, "maxRecords": 1})
     records = resp.get("records", [])
     if records:
@@ -165,32 +286,9 @@ def to_airtable_attachments(file_urls: List[str]) -> List[Dict[str, str]]:
     return attachments
 
 
-def extract_file_urls_from_answers(answers: Dict[str, Any]) -> List[str]:
-    """
-    Jotform answers structure varies by form setup.
-    We try to robustly extract anything that looks like a URL from file upload answers.
-    """
-    urls: List[str] = []
-
-    # If user provided a specific resume question id, prioritize it.
-    if JOTFORM_RESUME_QID and JOTFORM_RESUME_QID in answers:
-        a = answers[JOTFORM_RESUME_QID]
-        urls.extend(extract_urls_from_one_answer(a))
-        return dedupe_keep_order(urls)
-
-    # Otherwise, scan all answers for file-like URLs
-    for _, a in answers.items():
-        urls.extend(extract_urls_from_one_answer(a))
-
-    # Heuristic: keep only http(s) strings
-    urls = [u for u in urls if isinstance(u, str) and u.startswith(("http://", "https://"))]
-    return dedupe_keep_order(urls)
-
-
 def extract_urls_from_one_answer(answer_obj: Any) -> List[str]:
     found: List[str] = []
     if isinstance(answer_obj, dict):
-        # common places
         for k in ["answer", "prettyFormat", "value"]:
             v = answer_obj.get(k)
             found.extend(extract_urls_from_one_answer(v))
@@ -198,7 +296,6 @@ def extract_urls_from_one_answer(answer_obj: Any) -> List[str]:
         for item in answer_obj:
             found.extend(extract_urls_from_one_answer(item))
     elif isinstance(answer_obj, str):
-        # sometimes multiple URLs separated by newlines/commas
         parts = [p.strip() for p in answer_obj.replace("\n", ",").split(",")]
         for p in parts:
             if p.startswith(("http://", "https://")):
@@ -206,24 +303,11 @@ def extract_urls_from_one_answer(answer_obj: Any) -> List[str]:
     return found
 
 
-def dedupe_keep_order(items: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for x in items:
-        if x not in seen:
-            seen.add(x)
-            out.append(x)
-    return out
-
-
 def fetch_all_submissions() -> List[Dict[str, Any]]:
-    """
-    Pull submissions in pages.
-    Jotform API returns content with pagination (offset).
-    """
+    """Pull submissions in pages."""
     submissions: List[Dict[str, Any]] = []
     offset = 0
-    limit = 100  # page size
+    limit = 100
     while True:
         resp = jotform_get(f"/form/{JOTFORM_FORM_ID}/submissions", {"limit": limit, "offset": offset})
         page = resp.get("content", [])
@@ -231,35 +315,26 @@ def fetch_all_submissions() -> List[Dict[str, Any]]:
             break
         submissions.extend(page)
         offset += limit
-        # safety break for extremely large forms
         if limit and len(page) < limit:
             break
     return submissions
 
 
-def upsert_to_airtable(submission: Dict[str, Any], file_urls: List[str], dry_run: bool = False) -> None:
+def upsert_to_airtable(submission: Dict[str, Any], dry_run: bool = False) -> None:
     submission_id = str(submission.get("id", ""))
-    updated_at = parse_timestamp(submission.get("updated_at") or submission.get("created_at"))
 
+    # Start with submission ID for tracking
     fields: Dict[str, Any] = {
-        FIELD_SUBMISSION_ID: submission_id,
-        FIELD_UPDATED_AT: str(updated_at),
+        SUBMISSION_ID_FIELD: submission_id,
     }
 
-    # Optional raw payload to debug answer parsing
-    if FIELD_RAW:
-        fields[FIELD_RAW] = json.dumps(submission, ensure_ascii=False)
-
-    # Map individual form fields to Airtable
     questions = fetch_form_questions()
     answers = submission.get("answers", {}) or {}
 
-    # Loop through all questions to handle both filled and cleared fields
     for qid, question in questions.items():
         field_name = question.get("name", "")
         qtype = question.get("type", "")
 
-        # Skip non-input controls
         if qtype in ["control_head", "control_button", "control_pagebreak", "control_divider", "control_text", "control_image"]:
             continue
 
@@ -267,34 +342,62 @@ def upsert_to_airtable(submission: Dict[str, Any], file_urls: List[str], dry_run
             continue
 
         answer_obj = answers.get(qid)
+
+        # Handle composite fields (name, address, phone)
+        if field_name in COMPOSITE_FIELDS:
+            composite_values = extract_composite_fields(field_name, answer_obj)
+            # Filter out any SKIP_FIELDS from composite values
+            for k, v in composite_values.items():
+                if k not in SKIP_FIELDS:
+                    fields[k] = v
+            continue
+
+        # Map field name to Airtable field name
+        airtable_field = FIELD_MAPPING.get(field_name, field_name)
+
+        # Skip problematic select fields
+        if airtable_field in SKIP_FIELDS:
+            continue
+
         value = get_answer_value(answer_obj, qtype)
 
-        # Set appropriate empty value for cleared fields
-        if value is None or value == "":
-            if qtype == "control_fileupload":
-                fields[field_name] = []  # Empty array clears attachments
-            else:
-                fields[field_name] = ""  # Empty string clears text fields
-        else:
-            fields[field_name] = value
+        # Only add non-empty values
+        if value is not None and value != "":
+            # Convert numeric fields
+            if airtable_field in NUMERIC_FIELDS:
+                try:
+                    value = int(value)
+                except (ValueError, TypeError):
+                    value = None
+            # Convert multi-select fields to arrays
+            elif airtable_field in MULTI_SELECT_FIELDS:
+                if isinstance(value, str):
+                    value = [v.strip() for v in value.split(",") if v.strip()]
+            # Normalize vocation field values to match Airtable options
+            elif airtable_field in VOCATION_FIELDS:
+                if isinstance(value, str):
+                    value = VOCATION_VALUE_MAP.get(value, value)
+            if value is not None and value != []:
+                fields[airtable_field] = value
 
-    record_id = find_airtable_record_by_submission_id(submission_id)
+    # Look up existing record by submission ID
+    record_id = find_record_by_submission_id(submission_id)
 
     if dry_run:
-        print(f"[DRY RUN] Would {'update' if record_id else 'create'} Airtable record for submission {submission_id}")
-        print(f"          updated_at={updated_at}, files={len(file_urls)}")
+        action = "update" if record_id else "create"
+        print(f"[DRY RUN] Would {action} record for submission {submission_id}")
+        print(f"          Fields: {list(fields.keys())}")
         return
 
     payload = {"fields": fields}
 
     if record_id:
         airtable_patch(record_id, payload)
-        print(f"[OK] Updated Airtable record {record_id} for submission {submission_id} (files={len(file_urls)})")
+        print(f"[OK] Updated record {record_id} for submission {submission_id}")
     else:
         airtable_post(payload)
-        print(f"[OK] Created Airtable record for submission {submission_id} (files={len(file_urls)})")
+        print(f"[OK] Created record for submission {submission_id}")
 
-    # Airtable rate limit friendliness
     time.sleep(0.25)
 
 
@@ -302,7 +405,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Run once and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Do not write to Airtable.")
-    parser.add_argument("--ignore-watermark", action="store_true", help="Process all submissions regardless of watermark.")
+    parser.add_argument("--ignore-watermark", action="store_true", help="Process all submissions.")
     args = parser.parse_args()
 
     if not (JOTFORM_FORM_ID and AIRTABLE_BASE_ID and AIRTABLE_TABLE):
@@ -316,16 +419,12 @@ def main():
 
     newest_seen = last_watermark
 
-    # Process only updated submissions
     for s in submissions:
         updated_at = parse_timestamp(s.get("updated_at") or s.get("created_at"))
         if updated_at <= last_watermark:
             continue
 
-        answers = s.get("answers", {}) or {}
-        file_urls = extract_file_urls_from_answers(answers)
-
-        upsert_to_airtable(s, file_urls, dry_run=args.dry_run)
+        upsert_to_airtable(s, dry_run=args.dry_run)
 
         if updated_at > newest_seen:
             newest_seen = updated_at
@@ -336,10 +435,6 @@ def main():
     else:
         print("No watermark update needed.")
 
-    if args.once:
-        return
-
 
 if __name__ == "__main__":
     main()
-
