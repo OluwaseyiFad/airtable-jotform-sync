@@ -1,97 +1,51 @@
-# Quick Reference Guide
+# Quick Reference
 
-A one-page cheat sheet for the most common tasks.
+Use this page for the most common actions.
 
----
+## Normal behavior
 
-## 🔄 Normal Operation
+| Event | Expected result | Your action |
+|---|---|---|
+| New form submission | Appears in Airtable within ~1 hour | None |
+| Submission edited | Record updates in Airtable | None |
+| New Jotform question | Airtable field is created | Unhide field |
+| Question renamed/deleted | No automatic rename/delete in Airtable | Update Airtable manually |
 
-| Task | What Happens | Your Action |
-|------|--------------|-------------|
-| New form submission | Auto-syncs within 1 hour | None - just monitor |
-| Add new question to form | Creates hidden Airtable column | Unhide the column |
-| Update existing submission | Auto-syncs changes | None |
-| Delete form question | Nothing automatic | Manually delete column in Airtable |
-| Rename form question | Nothing automatic | Manually rename column in Airtable |
+## Check sync status
 
----
+1. Open GitHub repository.
+2. Go to `Actions`.
+3. Open latest `Sync Jotform to Airtable` run.
+4. Confirm status icon:
+- Green check: success
+- Red X: failed
+- Yellow: running
 
-## ⚡ Common Actions
+## Run manual sync
 
-### Check Sync Status
-1. Go to repository on GitHub
-2. Click **Actions** tab
-3. Look for green checkmarks ✅
+1. `Actions` tab
+2. `Sync Jotform to Airtable`
+3. `Run workflow`
+4. Wait for completion
 
-### Run Manual Sync
-1. **Actions** tab
-2. Click **"Sync Jotform to Airtable"** (left sidebar)
-3. **"Run workflow"** button
-4. **"Run workflow"** (green button)
+## Common fixes
 
-### Unhide New Field
-1. Open Airtable
-2. Scroll right to **"+"** or **"Hidden fields"**
-3. Click eye icon 👁️ next to field name
-4. Drag to reorder
+| Problem | First action |
+|---|---|
+| New field not visible | Unhide field in Airtable |
+| Run failed | Open `sync` logs in failed run |
+| No recent runs | Check schedule and run manually |
+| Wrong data | Compare with original Jotform submission |
+| Access error | Re-check repo invitation and permissions |
 
-### Delete Field
-**Jotform:** Form builder → Delete question → Save  
-**Airtable:** Column dropdown → "Delete field" → Confirm
+## Safety reminders
 
-### Rename Field
-**Jotform:** Edit question label → Save  
-**Airtable:** Column dropdown → "Customize field type" → Change name → Save
+- Do not share API keys in screenshots or chat.
+- Keep Airtable field names aligned with Jotform names.
+- Confirm success in Actions after manual changes.
 
----
+## More help
 
-## 🚨 Troubleshooting Quick Checks
-
-| Problem | First Thing to Check |
-|---------|---------------------|
-| New field not showing | Hidden fields in Airtable |
-| Sync hasn't run | Actions tab - when was last run? |
-| Red X in Actions | Click run → Click "sync" → Read error |
-| Can't access repository | Check email for invitation |
-| Data looks wrong | Check original Jotform submission |
-
----
-
-## 📞 Contact Information
-
-**Technical Support:** [Your contact info]  
-**GitHub Repository:** github.com/OluwaseyiFad/airtable-jotform-sync  
-**Jotform Dashboard:** [Your Jotform URL]  
-**Airtable Base:** [Your Airtable URL]
-
----
-
-## 🔗 Important Links
-
-- **Documentation:** Check repository files on GitHub
-- **GitHub Status:** githubstatus.com
-- **GitHub Help:** docs.github.com
-- **Jotform Support:** jotform.com/help
-- **Airtable Support:** support.airtable.com
-
----
-
-## ⏰ Sync Schedule
-
-**Automatic:** Every hour, on the hour  
-**Manual:** Anytime via Actions tab  
-**Duration:** Usually 1-3 minutes
-
----
-
-## 🔐 Security Reminders
-
-✅ Use strong GitHub password  
-✅ Enable two-factor authentication  
-✅ Don't share login credentials  
-✅ Use collaborator invites for team access  
-✅ Review repository access monthly  
-
----
-
-*Print this page for quick reference at your desk!*
+- `USER_GUIDE.md` for detailed non-technical instructions
+- `GITHUB_ACCESS_GUIDE.md` for account/access issues
+- `TECHNICAL_SETUP_GUIDE.md` for technical troubleshooting
